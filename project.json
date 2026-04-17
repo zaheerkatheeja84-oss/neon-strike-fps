@@ -1,0 +1,23 @@
+{
+  "overview": "A playable 3D First-Person Shooter game with cyberpunk neon aesthetics. Features WASD movement, hitscan shooting with ammo management, AI enemies that charge the player, health/score tracking, and a full-viewport game canvas.",
+  "features": [
+    "WASD + mouse first-person movement and camera",
+    "Hitscan shooting with ammo counter and reload (R key)",
+    "AI enemies that spawn and charge toward player",
+    "Health bar and score counter UI",
+    "Cyberpunk neon arena environment",
+    "Game Over screen with restart",
+    "Hit feedback — enemy flash and screen red tint on damage"
+  ],
+  "category": "game",
+  "tags": [
+    "fps",
+    "game",
+    "3d",
+    "cyberpunk",
+    "shooter",
+    "three-js",
+    "react-three-fiber"
+  ],
+  "last_updated": "2026-04-17T14:55:30.426Z"
+}

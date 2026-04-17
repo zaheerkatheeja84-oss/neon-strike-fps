@@ -1,0 +1,284 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-display: "General Sans";
+    --font-body: "General Sans";
+    --font-mono: "Geist Mono";
+    --radius: 0rem;
+
+    --background: 0.06 0 0;
+    --foreground: 0.95 0 0;
+    --card: 0.1 0 0;
+    --card-foreground: 0.95 0 0;
+    --popover: 0.12 0 0;
+    --popover-foreground: 0.95 0 0;
+
+    --primary: 0.65 0.17 262;
+    --primary-foreground: 0.06 0 0;
+
+    --secondary: 0.6 0.15 270;
+    --secondary-foreground: 0.95 0 0;
+    --muted: 0.2 0 0;
+    --muted-foreground: 0.6 0 0;
+
+    --accent: 0.65 0.17 262;
+    --accent-foreground: 0.95 0 0;
+
+    --destructive: 0.55 0.22 25;
+    --destructive-foreground: 0.95 0 0;
+
+    --border: 0.2 0 0;
+    --input: 0.15 0 0;
+    --ring: 0.7 0.2 262;
+
+    --chart-1: 0.7 0.22 262;
+    --chart-2: 0.65 0.2 320;
+    --chart-3: 0.55 0.18 270;
+    --chart-4: 0.6 0.17 280;
+    --chart-5: 0.65 0.19 275;
+
+    --sidebar: 0.08 0 0;
+    --sidebar-foreground: 0.95 0 0;
+    --sidebar-primary: 0.7 0.22 262;
+    --sidebar-primary-foreground: 0.06 0 0;
+    --sidebar-accent: 0.65 0.2 320;
+    --sidebar-accent-foreground: 0.95 0 0;
+    --sidebar-border: 0.2 0 0;
+    --sidebar-ring: 0.7 0.22 262;
+
+    --neon-cyan: 0.7 0.22 262;
+    --neon-magenta: 0.65 0.2 320;
+    --neon-glow: 0 0 20px currentColor;
+
+    /* Cyberpunk raw color values for JS/inline use */
+    --cyan-raw: oklch(0.7 0.22 262);
+    --magenta-raw: oklch(0.65 0.2 320);
+  }
+
+  .dark {
+    --background: 0.06 0 0;
+    --foreground: 0.95 0 0;
+    --card: 0.1 0 0;
+    --card-foreground: 0.95 0 0;
+    --popover: 0.12 0 0;
+    --popover-foreground: 0.95 0 0;
+
+    --primary: 0.7 0.22 262;
+    --primary-foreground: 0.06 0 0;
+
+    --secondary: 0.65 0.2 320;
+    --secondary-foreground: 0.95 0 0;
+    --muted: 0.2 0 0;
+    --muted-foreground: 0.6 0 0;
+
+    --accent: 0.7 0.22 262;
+    --accent-foreground: 0.95 0 0;
+
+    --destructive: 0.55 0.22 25;
+    --destructive-foreground: 0.95 0 0;
+
+    --border: 0.2 0 0;
+    --input: 0.15 0 0;
+    --ring: 0.7 0.22 262;
+
+    --chart-1: 0.7 0.22 262;
+    --chart-2: 0.65 0.2 320;
+    --chart-3: 0.55 0.18 270;
+    --chart-4: 0.6 0.17 280;
+    --chart-5: 0.65 0.19 275;
+
+    --sidebar: 0.08 0 0;
+    --sidebar-foreground: 0.95 0 0;
+    --sidebar-primary: 0.7 0.22 262;
+    --sidebar-primary-foreground: 0.06 0 0;
+    --sidebar-accent: 0.65 0.2 320;
+    --sidebar-accent-foreground: 0.95 0 0;
+    --sidebar-border: 0.2 0 0;
+    --sidebar-ring: 0.7 0.22 262;
+
+    --neon-cyan: 0.7 0.22 262;
+    --neon-magenta: 0.65 0.2 320;
+    --neon-glow: 0 0 20px currentColor;
+
+    --cyan-raw: oklch(0.7 0.22 262);
+    --magenta-raw: oklch(0.65 0.2 320);
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  /* Game canvas: full viewport, no scroll */
+  html,
+  body,
+  #root {
+    width: 100vw;
+    height: 100vh;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: #050510;
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background text-foreground font-body antialiased;
+  }
+
+  canvas {
+    display: block;
+    width: 100vw !important;
+    height: 100vh !important;
+    outline: none;
+  }
+}
+
+@font-face {
+  font-family: "General Sans";
+  src: url("/assets/fonts/GeneralSans.woff2") format("woff2");
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  src: url("/assets/fonts/GeistMono.woff2") format("woff2");
+  font-display: swap;
+}
+
+@layer utilities {
+  .transition-smooth {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .hud-text {
+    @apply font-mono text-xs tracking-widest uppercase;
+  }
+
+  .neon-cyan {
+    @apply text-[oklch(var(--neon-cyan))];
+  }
+
+  .neon-magenta {
+    @apply text-[oklch(var(--neon-magenta))];
+  }
+
+  .neon-border-cyan {
+    @apply border-[oklch(var(--neon-cyan))];
+  }
+
+  .neon-border-magenta {
+    @apply border-[oklch(var(--neon-magenta))];
+  }
+
+  /* HUD glass panel */
+  .hud-panel {
+    background: oklch(0.08 0 0 / 0.85);
+    border: 1px solid oklch(0.7 0.22 262 / 0.4);
+    backdrop-filter: blur(8px);
+  }
+
+  /* Neon glow text */
+  .glow-cyan {
+    text-shadow: 0 0 8px oklch(0.7 0.22 262), 0 0 20px oklch(0.7 0.22 262 / 0.6);
+  }
+
+  .glow-magenta {
+    text-shadow: 0 0 8px oklch(0.65 0.2 320), 0 0 20px oklch(0.65 0.2 320 / 0.6);
+  }
+
+  /* CRT scanline overlay */
+  .scanlines {
+    background-image: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      oklch(0 0 0 / 0.12) 2px,
+      oklch(0 0 0 / 0.12) 4px
+    );
+    pointer-events: none;
+  }
+
+  /* Fixed crosshair at center */
+  .crosshair {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 100;
+  }
+}
+
+/* ─── Game HUD Animations ───────────────────────────────────────────────── */
+@keyframes hudBlink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes gameOverGlitch {
+  0%,
+  90%,
+  100% {
+    text-shadow: 0 0 12px oklch(0.72 0.22 330), 0 0 40px
+      oklch(0.72 0.22 330 / 0.5);
+    transform: none;
+  }
+  92% {
+    text-shadow: -3px 0 oklch(0.78 0.18 195), 3px 0 oklch(0.72 0.22 330), 0 0
+      40px oklch(0.72 0.22 330 / 0.5);
+    transform: skewX(-4deg);
+  }
+  94% {
+    text-shadow: 3px 0 oklch(0.78 0.18 195), -3px 0 oklch(0.72 0.22 330), 0 0
+      40px oklch(0.72 0.22 330 / 0.5);
+    transform: skewX(2deg);
+  }
+  96% {
+    text-shadow: 0 0 12px oklch(0.72 0.22 330), 0 0 40px
+      oklch(0.72 0.22 330 / 0.5);
+    transform: none;
+  }
+}
+
+@keyframes screenFlicker {
+  0% {
+    opacity: 1;
+  }
+  10% {
+    opacity: 0.85;
+  }
+  20% {
+    opacity: 1;
+  }
+  30% {
+    opacity: 0.9;
+  }
+  50% {
+    opacity: 1;
+  }
+  70% {
+    opacity: 0.88;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.hud-screen-flicker {
+  animation: screenFlicker 0.3s ease-in-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hud-screen-flicker,
+  [style*="animation"] {
+    animation: none !important;
+  }
+}
