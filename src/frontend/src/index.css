@@ -128,11 +128,16 @@
     @apply bg-background text-foreground font-body antialiased;
   }
 
+  /* Main game canvas fills viewport. Gun overlay canvas is handled via inline styles. */
   canvas {
     display: block;
+    outline: none;
+  }
+
+  /* Only the first/main canvas fills the full viewport */
+  #root > div > canvas:first-of-type {
     width: 100vw !important;
     height: 100vh !important;
-    outline: none;
   }
 }
 

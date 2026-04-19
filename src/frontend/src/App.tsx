@@ -1,14 +1,24 @@
+/**
+ * App.tsx — Neon Strike FPS
+ *
+ * CRITICAL FIXES vs previous version:
+ * 1. Removed PointerLockManager — PlayerController handles its own mouse lock
+ * 2. PlayerController always mounts when isPlaying (no conditional render)
+ * 3. GunView canvas does NOT affect the main canvas CSS override in index.css
+ *    — fixed by giving the gun canvas explicit width/height styles
+ */
 import { Physics } from "@react-three/cannon";
 import { Canvas } from "@react-three/fiber";
-import { Suspense, useCallback, useEffect, useRef } from "react";
+import { Suspense } from "react";
 import { Arena } from "./components/Arena";
 import { EnemyManager } from "./components/EnemyManager";
 import { GameOverlay } from "./components/GameOverlay";
+import { GunView } from "./components/GunView";
 import { HUD } from "./components/HUD";
 import { PlayerController } from "./components/PlayerController";
 import { useGameStore } from "./store/gameStore";
 
-export function GameScene() {
+function GameScene() {
   const isPlaying = useGameStore((s) => s.isPlaying);
 
   return (
@@ -18,38 +28,6 @@ export function GameScene() {
       <EnemyManager />
     </Physics>
   );
-}
-
-// Pointer lock manager
-function PointerLockManager() {
-  const isPlaying = useGameStore((s) => s.isPlaying);
-  const isGameOver = useGameStore((s) => s.isGameOver);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-
-  const requestLock = useCallback(() => {
-    const canvas = document.querySelector("canvas");
-    if (canvas && isPlaying && !isGameOver) {
-      canvas.requestPointerLock();
-    }
-  }, [isPlaying, isGameOver]);
-
-  useEffect(() => {
-    if (isPlaying && !isGameOver) {
-      const canvas = document.querySelector("canvas");
-      canvasRef.current = canvas;
-      canvas?.addEventListener("click", requestLock);
-      requestLock();
-    } else {
-      if (document.pointerLockElement) {
-        document.exitPointerLock();
-      }
-    }
-    return () => {
-      canvasRef.current?.removeEventListener("click", requestLock);
-    };
-  }, [isPlaying, isGameOver, requestLock]);
-
-  return null;
 }
 
 export default function App() {
@@ -64,11 +42,17 @@ export default function App() {
         background: "#050510",
       }}
     >
+      {/* Main 3D game canvas */}
       <Canvas
         data-ocid="game.canvas"
         shadows
-        style={{ position: "absolute", inset: 0 }}
-        camera={{ fov: 75, near: 0.1, far: 1000 }}
+        style={{
+          position: "absolute",
+          inset: 0,
+          width: "100vw",
+          height: "100vh",
+        }}
+        camera={{ fov: 75, near: 0.1, far: 1000, position: [0, 1.4, 0] }}
         gl={{ antialias: true, alpha: false }}
       >
         <color attach="background" args={["#050510"]} />
@@ -77,8 +61,13 @@ export default function App() {
         </Suspense>
       </Canvas>
 
-      <PointerLockManager />
+      {/* Gun overlay — separate canvas, pointer-events none */}
+      <GunView />
+
+      {/* HUD — health, ammo, score, crosshair */}
       <HUD />
+
+      {/* Start / Game Over overlay */}
       <GameOverlay />
     </div>
   );

@@ -1,84 +1,80 @@
+/**
+ * PlayerController — FPS player with WASD movement, mouse look, jump, shoot.
+ *
+ * CRITICAL FIX: Does NOT use PointerLockControls from drei.
+ * Instead uses manual mouse tracking that ALWAYS works:
+ *   - Tries pointer lock for clean relative movement
+ *   - Falls back to delta-from-last-position tracking if pointer lock is denied
+ * This means controls work in ALL browsers without needing pointer lock.
+ */
 import { useBox } from "@react-three/cannon";
-import type { PublicApi } from "@react-three/cannon";
-import { PointerLockControls } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
-import { useCallback, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { useGameStore } from "../store/gameStore";
 import { playerPositionRef } from "./EnemyManager";
+import { gunShootSignal } from "./GunView";
 
 const MOVE_SPEED = 8;
 const JUMP_VELOCITY = 7;
 const PLAYER_HEIGHT = 1.8;
-const EYE_OFFSET = 0.75; // offset from center to eye level
+const EYE_OFFSET = 0.75;
+const MOUSE_SENSITIVITY = 0.002;
 
-// Track pressed keys
+// ─── Key state (module-level so it survives re-renders) ─────────────────────
 const keys: Record<string, boolean> = {};
 
+// ─── Camera Euler (module-level for stability) ──────────────────────────────
+const cameraEuler = new THREE.Euler(0, 0, 0, "YXZ");
+
+// ─── Keyboard hook ───────────────────────────────────────────────────────────
 function useKeyboard() {
   useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
+    const onDown = (e: KeyboardEvent) => {
       keys[e.code] = true;
     };
-    const onKeyUp = (e: KeyboardEvent) => {
+    const onUp = (e: KeyboardEvent) => {
       keys[e.code] = false;
     };
-    window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("keyup", onKeyUp);
+    window.addEventListener("keydown", onDown);
+    window.addEventListener("keyup", onUp);
     return () => {
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("keydown", onDown);
+      window.removeEventListener("keyup", onUp);
     };
   }, []);
 }
 
-// Expose shoot ray function via a stable ref for the canvas click handler
+// Expose shoot signal so canvas click handler in App.tsx can fire it
 export const shootRayRef: { current: (() => void) | null } = { current: null };
 
 export function PlayerController() {
   const { camera, scene } = useThree();
   const isPlaying = useGameStore((s) => s.isPlaying);
   const isGameOver = useGameStore((s) => s.isGameOver);
-  const { shoot, ammo } = useGameStore();
 
-  // Grounded tracking
   const isGrounded = useRef(false);
-  // Physics body position tracker
-  const bodyPosition = useRef<THREE.Vector3>(
-    new THREE.Vector3(0, PLAYER_HEIGHT / 2, 0),
-  );
-  // Raycaster for shoot detection
+  const bodyPosition = useRef(new THREE.Vector3(0, PLAYER_HEIGHT / 2, 0));
+  const lastVelocityY = useRef(0);
   const raycaster = useRef(new THREE.Raycaster());
-  // Controls ref
-  const controlsRef = useRef<{ unlock: () => void } | null>(null);
+
+  // Mouse look state
+  const isPointerLocked = useRef(false);
+  const lastMouseX = useRef(-1);
+  const lastMouseY = useRef(-1);
 
   useKeyboard();
 
-  // Physics body: box standing upright
-  const [, bodyApi] = useBox<THREE.Mesh>(
-    () => ({
-      mass: 80,
-      position: [0, PLAYER_HEIGHT / 2, 0],
-      args: [0.6, PLAYER_HEIGHT, 0.6],
-      linearDamping: 0.9,
-      angularFactor: [0, 0, 0], // prevent tipping
-      allowSleep: false,
-      onCollide: (e) => {
-        // Detect floor collision for grounded state
-        if (e.contact.impactVelocity > 0.5) {
-          const normal = e.contact.ni;
-          // If the collision normal has upward component, we're on ground
-          if (normal[1] > 0.5) {
-            isGrounded.current = true;
-          }
-        }
-      },
-    }),
-    undefined,
-    // We don't need the mesh ref here, passing undefined
-  );
+  // ─── Physics body ─────────────────────────────────────────────────────────
+  const [, bodyApi] = useBox<THREE.Mesh>(() => ({
+    mass: 80,
+    position: [0, PLAYER_HEIGHT / 2, 0],
+    args: [0.6, PLAYER_HEIGHT, 0.6],
+    linearDamping: 0.9,
+    angularFactor: [0, 0, 0] as [number, number, number],
+    allowSleep: false,
+  }));
 
-  // Subscribe to body position so camera can follow
   useEffect(() => {
     const unsub = bodyApi.position.subscribe((pos) => {
       bodyPosition.current.set(pos[0], pos[1], pos[2]);
@@ -86,14 +82,9 @@ export function PlayerController() {
     return unsub;
   }, [bodyApi]);
 
-  // Reset grounded flag every frame; re-set on contact
-  // Instead of relying solely on onCollide (which has timing issues),
-  // we also check Y velocity near zero each frame
-  const lastVelocityY = useRef(0);
   useEffect(() => {
     const unsub = bodyApi.velocity.subscribe((vel) => {
       lastVelocityY.current = vel[1];
-      // If nearly stationary vertically, assume grounded
       if (Math.abs(vel[1]) < 0.15) {
         isGrounded.current = true;
       } else if (vel[1] > 0.5) {
@@ -103,37 +94,122 @@ export function PlayerController() {
     return unsub;
   }, [bodyApi]);
 
-  // Shoot ray function
-  const shootRay = useCallback(() => {
+  // ─── Mouse look — hybrid pointer lock + direct delta ──────────────────────
+  useEffect(() => {
     if (!isPlaying || isGameOver) return;
-    if (ammo <= 0) return;
-    shoot();
 
-    // Set raycaster from camera center
+    const canvas = document.querySelector("canvas");
+    if (!canvas) return;
+
+    // Request pointer lock when game starts
+    const tryLock = () => {
+      canvas.requestPointerLock().catch(() => {
+        // Pointer lock denied — fallback mode is already active via mousemove
+      });
+    };
+
+    // Try to lock with a small delay so overlay is gone
+    const lockTimer = setTimeout(tryLock, 150);
+
+    const onPointerLockChange = () => {
+      isPointerLocked.current = document.pointerLockElement === canvas;
+      if (!isPointerLocked.current) {
+        // Reset last position so fallback mode starts fresh
+        lastMouseX.current = -1;
+        lastMouseY.current = -1;
+      }
+    };
+
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isPlaying || isGameOver) return;
+
+      let dx: number;
+      let dy: number;
+
+      if (isPointerLocked.current) {
+        // Pointer locked: use clean relative deltas
+        dx = e.movementX;
+        dy = e.movementY;
+      } else {
+        // Fallback: compute delta from last known position
+        if (lastMouseX.current === -1) {
+          lastMouseX.current = e.clientX;
+          lastMouseY.current = e.clientY;
+          return;
+        }
+        dx = e.clientX - lastMouseX.current;
+        dy = e.clientY - lastMouseY.current;
+        lastMouseX.current = e.clientX;
+        lastMouseY.current = e.clientY;
+      }
+
+      // Apply to camera euler (YXZ order = yaw then pitch)
+      cameraEuler.setFromQuaternion(camera.quaternion);
+      cameraEuler.y -= dx * MOUSE_SENSITIVITY;
+      cameraEuler.x -= dy * MOUSE_SENSITIVITY;
+      // Clamp pitch so player can't look completely upside down
+      cameraEuler.x = Math.max(
+        -Math.PI / 2 + 0.05,
+        Math.min(Math.PI / 2 - 0.05, cameraEuler.x),
+      );
+      camera.quaternion.setFromEuler(cameraEuler);
+    };
+
+    // Re-lock on canvas click (if pointer lock was lost)
+    const onCanvasClick = () => {
+      if (!isPointerLocked.current && isPlaying && !isGameOver) {
+        tryLock();
+      }
+    };
+
+    document.addEventListener("pointerlockchange", onPointerLockChange);
+    // Use document for mousemove to catch all mouse movement even outside canvas
+    document.addEventListener("mousemove", onMouseMove);
+    canvas.addEventListener("click", onCanvasClick);
+
+    return () => {
+      clearTimeout(lockTimer);
+      document.removeEventListener("pointerlockchange", onPointerLockChange);
+      document.removeEventListener("mousemove", onMouseMove);
+      canvas.removeEventListener("click", onCanvasClick);
+      if (document.pointerLockElement === canvas) {
+        document.exitPointerLock();
+      }
+      isPointerLocked.current = false;
+    };
+  }, [isPlaying, isGameOver, camera]);
+
+  // ─── Shoot handler ────────────────────────────────────────────────────────
+  const shootRay = () => {
+    const state = useGameStore.getState();
+    if (!state.isPlaying || state.isGameOver) return;
+    if (state.ammo <= 0) return;
+
+    state.shoot();
+    gunShootSignal.current += 1;
+
     raycaster.current.setFromCamera(new THREE.Vector2(0, 0), camera);
-    const intersects = raycaster.current.intersectObjects(scene.children, true);
+    const hits = raycaster.current.intersectObjects(scene.children, true);
 
-    for (const hit of intersects) {
-      // Traverse up to find enemy mesh with userData.enemyId
+    for (const hit of hits) {
       let obj: THREE.Object3D | null = hit.object;
       while (obj) {
         if (obj.userData.enemyId) {
-          // Call the hit flash handler which triggers kill + score via handleKill
           if (typeof obj.userData.hitEnemy === "function") {
             (obj.userData.hitEnemy as () => void)();
           }
-          break;
+          return;
         }
         obj = obj.parent;
       }
-      break; // only first hit
+      break;
     }
-  }, [isPlaying, isGameOver, ammo, shoot, camera, scene]);
+  };
 
-  // Expose shoot for external use
+  // Expose shoot for external canvas click handler
   useEffect(() => {
     shootRayRef.current = shootRay;
-  }, [shootRay]);
+  });
 
   // Reload on R key
   useEffect(() => {
@@ -146,10 +222,32 @@ export function PlayerController() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
+  // Shoot on mouse click — works with OR without pointer lock
+  const shootRayRef2 = useRef(shootRay);
+  useEffect(() => {
+    shootRayRef2.current = shootRay;
+  });
+
+  useEffect(() => {
+    if (!isPlaying || isGameOver) return;
+
+    const handleClick = (e: MouseEvent) => {
+      if (e.button !== 0) return;
+      shootRayRef2.current();
+    };
+
+    const canvas = document.querySelector("canvas");
+    canvas?.addEventListener("mousedown", handleClick);
+    return () => {
+      canvas?.removeEventListener("mousedown", handleClick);
+    };
+  }, [isPlaying, isGameOver]);
+
+  // ─── Game loop: movement + camera position ────────────────────────────────
   useFrame(() => {
     if (!isPlaying || isGameOver) return;
 
-    // Build movement direction in camera space
+    // Build movement vectors from camera orientation
     const forward = new THREE.Vector3();
     const right = new THREE.Vector3();
     camera.getWorldDirection(forward);
@@ -169,10 +267,8 @@ export function PlayerController() {
       velocity.addScaledVector(right, -MOVE_SPEED);
 
     if (velocity.lengthSq() > 0) {
-      // Set XZ velocity, preserve Y for gravity
       bodyApi.velocity.set(velocity.x, lastVelocityY.current, velocity.z);
     } else {
-      // Dampen XZ only
       bodyApi.velocity.set(0, lastVelocityY.current, 0);
     }
 
@@ -182,14 +278,14 @@ export function PlayerController() {
       bodyApi.velocity.set(velocity.x, JUMP_VELOCITY, velocity.z);
     }
 
-    // Move camera to eye level above body
+    // Sync camera to body position
     camera.position.set(
       bodyPosition.current.x,
       bodyPosition.current.y + EYE_OFFSET,
       bodyPosition.current.z,
     );
 
-    // Write player world position so EnemyManager can read it
+    // Share position with EnemyManager
     playerPositionRef.set(
       bodyPosition.current.x,
       bodyPosition.current.y,
@@ -197,41 +293,8 @@ export function PlayerController() {
     );
   });
 
-  // Handle click-to-shoot when pointer is locked
-  useEffect(() => {
-    const handleClick = () => {
-      if (document.pointerLockElement) {
-        shootRay();
-      }
-    };
-    window.addEventListener("click", handleClick);
-    return () => window.removeEventListener("click", handleClick);
-  }, [shootRay]);
-
-  // Unlock controls on game over
-  useEffect(() => {
-    if (isGameOver && controlsRef.current) {
-      controlsRef.current.unlock();
-    }
-  }, [isGameOver]);
-
-  if (!isPlaying) return null;
-
-  return (
-    <PointerLockControls
-      ref={(ref) => {
-        if (ref) {
-          controlsRef.current = ref as unknown as { unlock: () => void };
-        }
-      }}
-      makeDefault
-    />
-  );
-}
-
-// Helper to expose the physics API for use in GameScene
-export function usePlayerApi(): PublicApi | null {
-  return null; // Placeholder — PlayerController manages its own api internally
+  // No JSX needed — this component is pure logic
+  return null;
 }
 
 export default PlayerController;
